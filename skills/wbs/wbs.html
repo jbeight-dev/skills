@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Data Discovery WBS</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --cobalt: #1A56DB;
+    --cobalt-light: #EBF2FF;
+    --cobalt-mid: #3B70E0;
+    --cobalt-border: #93B4F0;
+    --text-primary: #111111;
+    --text-secondary: #4A4A4A;
+    --text-muted: #888888;
+    --border: #E0E0E0;
+    --bg: #FFFFFF;
+    --bg-alt: #F8F8F8;
+  }
+  body {
+    font-family: 'Noto Sans KR', sans-serif;
+    background: var(--bg);
+    color: var(--text-primary);
+    line-height: 1.6;
+    padding: 48px 40px;
+    max-width: 1140px;
+    margin: 0 auto;
+  }
+
+  /* ── Header ── */
+  .doc-header { border-bottom: 2px solid var(--cobalt); padding-bottom: 28px; margin-bottom: 32px; }
+  .doc-header .label { font-size: 11px; font-weight: 600; letter-spacing: 0.15em; text-transform: uppercase; color: var(--cobalt); margin-bottom: 10px; }
+  .doc-header h1 { font-size: 28px; font-weight: 700; color: var(--text-primary); margin-bottom: 10px; letter-spacing: -0.02em; }
+  .doc-header .meta { font-size: 13px; color: var(--text-muted); }
+  .doc-header .meta span { display: inline-block; margin-right: 20px; }
+  .summary-strip { display: flex; margin-top: 24px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .summary-item { flex: 1; padding: 14px 20px; border-right: 1px solid var(--border); background: var(--bg-alt); }
+  .summary-item:last-child { border-right: none; }
+  .summary-item .s-label { font-size: 11px; color: var(--text-muted); font-weight: 500; letter-spacing: 0.05em; margin-bottom: 4px; }
+  .summary-item .s-value { font-size: 18px; font-weight: 700; color: var(--cobalt); }
+  .summary-item .s-unit { font-size: 12px; font-weight: 400; color: var(--text-muted); margin-left: 3px; }
+
+  /* ── Filter Bar ── */
+  .filter-bar {
+    background: var(--bg-alt); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 20px; margin-bottom: 20px;
+    display: flex; flex-wrap: wrap; gap: 16px; align-items: center;
+  }
+  .filter-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .filter-group-label { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: var(--text-muted); text-transform: uppercase; white-space: nowrap; }
+  .filter-divider { width: 1px; height: 28px; background: var(--border); flex-shrink: 0; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 5px 12px; border-radius: 20px;
+    border: 1.5px solid var(--border); background: var(--bg);
+    font-size: 12px; font-weight: 500; color: var(--text-secondary);
+    cursor: pointer; transition: all 0.15s; white-space: nowrap; user-select: none;
+  }
+  .chip:hover { border-color: var(--cobalt-border); color: var(--cobalt); }
+  .chip.active { background: var(--cobalt); border-color: var(--cobalt); color: #fff; }
+  .chip .chip-count {
+    display: inline-flex; align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.12); border-radius: 10px;
+    font-size: 10px; font-weight: 700; padding: 0 5px; min-width: 18px; height: 16px;
+  }
+  .chip.active .chip-count { background: rgba(255,255,255,0.25); }
+  .chip.chip-analysis.active { background: #1A56DB; border-color: #1A56DB; }
+  .chip.chip-design.active   { background: #6B3FCC; border-color: #6B3FCC; }
+  .chip.chip-dev.active      { background: #1A7A4E; border-color: #1A7A4E; }
+  .chip.chip-feature-only.active { background: #B45309; border-color: #B45309; }
+  .filter-reset { margin-left: auto; font-size: 12px; color: var(--text-muted); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; white-space: nowrap; }
+  .filter-reset:hover { color: var(--cobalt); }
+
+  /* ── Result info ── */
+  .result-info { font-size: 12px; color: var(--text-muted); margin-bottom: 14px; }
+  .result-info strong { color: var(--cobalt); font-weight: 600; }
+
+  /* ── Table ── */
+  .wbs-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .wbs-table thead tr { background: var(--cobalt); color: #fff; }
+  .wbs-table thead th {
+    padding: 11px 14px; text-align: left; font-weight: 600;
+    font-size: 12px; letter-spacing: 0.03em; white-space: nowrap;
+  }
+  .wbs-table tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
+  .wbs-table tbody tr.row-hidden { display: none; }
+  .wbs-table tbody tr:hover td { background: var(--cobalt-light) !important; }
+  .wbs-table tbody td { padding: 10px 14px; vertical-align: middle; color: var(--text-secondary); line-height: 1.5; }
+
+  /* feature group header row */
+  .group-header td {
+    background: #F0F4FF !important;
+    padding: 8px 14px;
+    border-top: 2px solid var(--cobalt);
+    border-bottom: 1px solid var(--cobalt-border);
+  }
+  .group-header .group-label {
+    display: inline-flex; align-items: center; gap: 10px;
+  }
+  .group-num {
+    width: 24px; height: 24px; background: var(--cobalt); color: #fff;
+    border-radius: 6px; display: inline-flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; font-family: 'IBM Plex Mono', monospace; flex-shrink: 0;
+  }
+  .group-name { font-size: 13px; font-weight: 700; color: var(--cobalt); }
+  .group-badge { font-size: 11px; color: var(--text-muted); font-weight: 400; margin-left: 4px; }
+
+  /* regular cells */
+  .wbs-table tbody td.cell-id { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--text-muted); white-space: nowrap; width: 60px; }
+  .wbs-table tbody td.cell-phase { width: 72px; }
+  .wbs-table tbody td.cell-task { font-weight: 600; color: var(--text-primary); white-space: nowrap; width: 180px; }
+  .wbs-table tbody td.cell-detail { font-size: 12.5px; }
+  .wbs-table tbody td.cell-deliverable { font-size: 12px; color: var(--cobalt-mid); font-weight: 500; white-space: nowrap; width: 140px; }
+  .wbs-table tbody td.cell-duration { font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 600; text-align: center; white-space: nowrap; width: 56px; }
+
+  /* phase row bg */
+  tr[data-phase="분석"] td { background: #FAFCFF; }
+  tr[data-phase="설계"] td { background: #FDFAFF; }
+  tr[data-phase="개발"] td { background: #FAFFFE; }
+
+  /* phase badge */
+  .phase-badge { display: inline-block; padding: 3px 9px; border-radius: 4px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+  .badge-analysis { background: #EBF5FF; color: #1A56DB; border: 1px solid #93B4F0; }
+  .badge-design   { background: #F4F0FF; color: #6B3FCC; border: 1px solid #C4AAEE; }
+  .badge-dev      { background: #EDFAF3; color: #1A7A4E; border: 1px solid #7ECFA6; }
+
+  /* empty state */
+  .empty-row td { text-align: center; color: var(--text-muted); font-size: 13px; padding: 28px 0; background: var(--bg-alt) !important; }
+
+  /* ── Footer ── */
+  .doc-footer { margin-top: 48px; padding-top: 24px; border-top: 1px solid var(--border); }
+  .doc-footer .note { font-size: 13px; color: var(--text-muted); background: var(--cobalt-light); border-left: 3px solid var(--cobalt); padding: 12px 16px; border-radius: 0 6px 6px 0; }
+  .doc-footer .note strong { color: var(--cobalt); }
+</style>
+</head>
+<body>
+
+<header class="doc-header">
+  <div class="label">WBS · 분석 / 설계 / 개발</div>
+  <h1>키워드 기반 데이터 탐색</h1>
+  <div class="meta"><span>총 3개 기능</span><span>Phase 3 — 분석 · 설계 · 개발</span></div>
+  <div class="summary-strip">
+    <div class="summary-item"><div class="s-label">총 기능 수</div><div class="s-value">3<span class="s-unit">개</span></div></div>
+    <div class="summary-item"><div class="s-label">총 Task 수</div><div class="s-value">37<span class="s-unit">건</span></div></div>
+    <div class="summary-item"><div class="s-label">예상 기간</div><div class="s-value">8–10<span class="s-unit">주</span></div></div>
+    <div class="summary-item"><div class="s-label">담당자 추가</div><div class="s-value" style="font-size:14px;color:var(--text-muted);font-weight:500;">요청 시 추가</div></div>
+  </div>
+</header>
+
+<div class="filter-bar">
+  <div class="filter-group">
+    <span class="filter-group-label">보기</span>
+    <button class="chip chip-feature-only" id="btn-feature-only" onclick="toggleFeatureOnly(this)">기능 <span class="chip-count">3</span></button>
+  </div>
+  <div class="filter-divider"></div>
+  <div class="filter-group">
+    <span class="filter-group-label">단계</span>
+    <button class="chip chip-analysis" data-filter="phase" data-value="분석" onclick="toggleChip(this)">분석</button>
+    <button class="chip chip-design"   data-filter="phase" data-value="설계" onclick="toggleChip(this)">설계</button>
+    <button class="chip chip-dev"      data-filter="phase" data-value="개발" onclick="toggleChip(this)">개발</button>
+  </div>
+  <div class="filter-divider"></div>
+  <div class="filter-group">
+    <span class="filter-group-label">기능</span>
+    <button class="chip" data-filter="feature" data-value="1" onclick="toggleChip(this)">1. 검색어 자동완성 <span class="chip-count">13</span></button>
+    <button class="chip" data-filter="feature" data-value="2" onclick="toggleChip(this)">2. 자동완성 인덱스 <span class="chip-count">10</span></button>
+    <button class="chip" data-filter="feature" data-value="3" onclick="toggleChip(this)">3. 검색 결과 필터링 <span class="chip-count">14</span></button>
+  </div>
+  
+  
+  
+  <span class="filter-reset" onclick="resetFilters()">전체 보기</span>
+</div>
+
+<div class="result-info" id="result-info">전체 <strong>37</strong>건 표시 중</div>
+
+<table class="wbs-table">
+  <thead>
+    <tr>
+      <th style="width:60px">ID</th>
+      <th style="width:72px">Phase</th>
+      <th style="width:180px">Task</th>
+      <th>Detail</th>
+      <th style="width:140px">산출물</th>
+      <th style="width:56px">기간</th>
+    </tr>
+  </thead>
+  <tbody>
+
+    <!-- ── 그룹 1 ── -->
+    <tr class="group-header" data-section="1">
+      <td colspan="6">
+        <span class="group-label">
+          <span class="group-num">1</span>
+          <span class="group-name">검색어 자동완성 구축</span>
+          <span class="group-badge">13 Tasks</span>
+        </span>
+      </td>
+    </tr>
+    <tr data-section="1" data-phase="분석"><td class="cell-id">1.1</td><td class="cell-phase"><span class="phase-badge badge-analysis">분석</span></td><td class="cell-task">요구사항 분석</td><td class="cell-detail">자동완성 기능 범위 정의, 사용자 입력 패턴 수집</td><td class="cell-deliverable">요구사항 정의서</td><td class="cell-duration">2d</td></tr>
+    <tr data-section="1" data-phase="분석"><td class="cell-id">1.2</td><td class="cell-phase"><span class="phase-badge badge-analysis">분석</span></td><td class="cell-task">사용자 시나리오 작성</td><td class="cell-detail">검색 입력 흐름, 추천어 선택 시나리오 정의</td><td class="cell-deliverable">사용자 시나리오 문서</td><td class="cell-duration">1d</td></tr>
+    <tr data-section="1" data-phase="분석"><td class="cell-id">1.3</td><td class="cell-phase"><span class="phase-badge badge-analysis">분석</span></td><td class="cell-task">검색 로그 분석</td><td class="cell-detail">기존 검색 패턴, 인기 검색어, 오타 패턴 분석</td><td class="cell-deliverable">로그 분석 리포트</td><td class="cell-duration">2d</td></tr>
+    <tr data-section="1" data-phase="분석"><td class="cell-id">1.4</td><td class="cell-phase"><span class="phase-badge badge-analysis">분석</span></td><td class="cell-task">동의어/유사 키워드 패턴 분석</td><td class="cell-detail">업무 도메인 용어, 동의어 후보 목록 도출</td><td class="cell-deliverable">키워드 분석서</td><td class="cell-duration">2d</td></tr>
+    <tr data-section="1" data-phase="설계"><td class="cell-id">1.5</td><td class="cell-phase"><span class="phase-badge badge-design">설계</span></td><td class="cell-task">자동완성 아키텍처 설계</td><td class="cell-detail">Prefix 기반 / 동의어 / Metadata 추천 흐름 설계</td><td class="cell-deliverable">아키텍처 설계서</td><td class="cell-duration">2d</td></tr>
+    <tr data-section="1" data-phase="설계"><td class="cell-id">1.6</td><td class="cell-phase"><span class="phase-badge badge-design">설계</span></td><td class="cell-task">OpenSearch Suggest Index 설계</td><td class="cell-detail">Completion Suggester 구조, Mapping 정의</td><td class="cell-deliverable">Index 정의서</td><td class="cell-duration">2d</td></tr>
+    <tr data-section="1" data-phase="설계"><td class="cell-id">1.7</td><td class="cell-phase"><span class="phase-badge badge-design">설계</span></td><td class="cell-task">자동완성 API 명세 설계</td><td class="cell-detail">Request/Response 스펙, 추천 유형 파라미터 정의</td><td class="cell-deliverable">API 명세서</td><td class="cell-duration">1d</td></tr>
+    <tr data-section="1" data-phase="설계"><td class="cell-id">1.8</td><td class="cell-phase"><span class="phase-badge badge-design">설계</span></td><td class="cell-task">자동완성 UI Wireframe 설계</td><td class="cell-detail">드롭다운 레이아웃, 추천어 카테고리 구분 UX 설계</td><td class="cell-deliverable">Wireframe</td><td class="cell-duration">1d</td></tr>
+    <tr data-section="1" data-phase="개발"><td class="cell-id">1.9</td><td class="cell-phase"><span class="phase-badge badge-dev">개발</span></td><td class="cell-task">Prefix 기반 자동완성 API 개발</td><td class="cell-detail">OpenSearch Completion Suggester 연동</td><td class="cell-deliverable">Backend API</td><td class="cell-duration">3d</td></tr>
+    <tr data-section="1" data-phase="개발"><td class="cell-id">1.10</td><td class="cell-phase"><span class="phase-badge badge-dev">개발</span></td><td class="cell-task">동의어 추천 API 개발</td><td class="cell-detail">동의어 사전 연동, 확장 검색어 반환 로직</td><td class="cell-deliverable">Backend API</td><td class="cell-duration">3d</td></tr>
+    <tr data-section="1" data-phase="개발"><td class="cell-id">1.11</td><td class="cell-phase"><span class="phase-badge badge-dev">개발</span></td><td class="cell-task">유사 업무 키워드 추천 API 개발</td><td class="cell-detail">Metadata 기반 유사 키워드 추출 로직</td><td class="cell-deliverable">Backend API</td><td class="cell-duration">3d</td></tr>
+    <tr data-section="1" data-phase="개발"><td class="cell-id">1.12</td><td class="cell-phase"><span class="phase-badge badge-dev">개발</span></td><td class="cell-task">인기 검색어 추천 API 개발</td><td class="cell-detail">검색 로그 집계 기반 인기 키워드 반환</td><td class="cell-deliverable">Backend API</td><td class="cell-duration">2d</td></tr>
+    <tr data-section="1" data-phase="개발"><td class="cell-id">1.13</td><td class="cell-phase"><span class="phase-badge badge-dev">개발</span></td><td class="cell-task">자동완성 UI 개발</td><td class="cell-detail">입력 시 드롭다운 렌더링, 추천어 유형별 표시</td><td class="cell-deliverable">Frontend UI</td><td class="cell-duration">3d</td></tr>
+
+    <!-- ── 그룹 2 ── -->
+    <tr class="group-header" data-section="2">
+      <td colspan="6">
+        <span class="group-label">
+          <span class="group-num">2</span>
+          <span class="group-name">자동완성 인덱스 구축</span>
+          <span class="group-badge">10 Tasks</span>
+        </span>
+      </td>
+    </tr>
+    <tr data-section="2" data-phase="분석"><td class="cell-id">2.1</td><td class="cell-phase"><span class="phase-badge badge-analysis">분석</span></td><td class="cell-task">추천어 데이터 소스 분석</td><td class="cell-detail">Catalog, 태그, 컬럼명, 검색 로그 등 소스 정의</td><td class="cell-deliverable">데이터 소스 정의서</td><td class="cell-duration">2d</td></tr>
+    <tr data-section="2" data-phase="분석"><td class="cell-id">2.2</td><td class="cell-phase"><span class="phase-badge badge-analysis">분석</span></td><td class="cell-task">검색 로그 품질 분석</td><td class="cell-detail">로그 구조, 유효 검색어 기준, 노이즈 필터링 기준 정의</td><td class="cell-deliverable">로그 품질 분석서</td><td class="cell-duration">2d</td></tr>
+    <tr data-section="2" data-phase="분석"><td class="cell-id">2.3</td><td class="cell-phase"><span class="phase-badge badge-analysis">분석</span></td><td class="cell-task">추천어 사전 요구사항 분석</td><td class="cell-detail">업무 도메인 용어 범위, 동의어 체계 분석</td><td class="cell-deliverable">요구사항 정의서</td><td class="cell-duration">1d</td></tr>
+    <tr data-section="2" data-phase="설계"><td class="cell-id">2.4</td><td class="cell-phase"><span class="phase-badge badge-design">설계</span></td><td class="cell-task">OpenSearch Suggest Index 스키마 설계</td><td class="cell-detail">Mapping, Analyzer, Tokenizer 구조 설계</td><td class="cell-deliverable">Index 스키마 문서</td><td class="cell-duration">2d</td></tr>
+    <tr data-section="2" data-phase="설계"><td class="cell-id">2.5</td><td class="cell-phase"><span class="phase-badge badge-design">설계</span></td><td class="cell-task">추천어 사전 데이터 구조 설계</td><td class="cell-detail">동의어/금칙어/도메인어 구분 체계, 관리 방식 설계</td><td class="cell-deliverable">사전 구조 설계서</td><td class="cell-duration">2d</td></tr>
+    <tr data-section="2" data-phase="설계"><td class="cell-id">2.6</td><td class="cell-phase"><span class="phase-badge badge-design">설계</span></td><td class="cell-task">추천어 생성 Batch 설계</td><td class="cell-detail">검색 로그 수집 → 집계 → 인덱싱 파이프라인 설계</td><td class="cell-deliverable">Batch 설계서</td><td class="cell-duration">2d</td></tr>
+    <tr data-section="2" data-phase="개발"><td class="cell-id">2.7</td><td class="cell-phase"><span class="phase-badge badge-dev">개발</span></td><td class="cell-task">OpenSearch Suggest Index 생성</td><td class="cell-detail">Index 생성, Mapping 적용, Analyzer 설정</td><td class="cell-deliverable">OpenSearch Index</td><td class="cell-duration">2d</td></tr>
+    <tr data-section="2" data-phase="개발"><td class="cell-id">2.8</td><td class="cell-phase"><span class="phase-badge badge-dev">개발</span></td><td class="cell-task">추천어 사전 구축</td><td class="cell-detail">동의어/도메인 키워드 수집 및 사전 데이터 적재</td><td class="cell-deliverable">추천어 사전 DB</td><td class="cell-duration">3d</td></tr>
+    <tr data-section="2" data-phase="개발"><td class="cell-id">2.9</td><td class="cell-phase"><span class="phase-badge badge-dev">개발</span></td><td class="cell-task">검색 로그 기반 추천어 생성 Batch 개발</td><td class="cell-detail">로그 집계 → 인기 검색어 추출 → Index 적재 파이프라인</td><td class="cell-deliverable">Batch 프로그램</td><td class="cell-duration">3d</td></tr>
+    <tr data-section="2" data-phase="개발"><td class="cell-id">2.10</td><td class="cell-phase"><span class="phase-badge badge-dev">개발</span></td><td class="cell-task">추천어 Index 갱신 스케줄러 개발</td><td class="cell-detail">주기적 인덱스 재생성 및 증분 업데이트 로직</td><td class="cell-deliverable">스케줄러</td><td class="cell-duration">2d</td></tr>
+
+    <!-- ── 그룹 3 ── -->
+    <tr class="group-header" data-section="3">
+      <td colspan="6">
+        <span class="group-label">
+          <span class="group-num">3</span>
+          <span class="group-name">검색 결과 필터링 기능 구축</span>
+          <span class="group-badge">14 Tasks</span>
+        </span>
+      </td>
+    </tr>
+    <tr data-section="3" data-phase="분석"><td class="cell-id">3.1</td><td class="cell-phase"><span class="phase-badge badge-analysis">분석</span></td><td class="cell-task">필터링 요구사항 분석</td><td class="cell-detail">필터 유형(Catalog/데이터 유형/도메인/태그) 범위 정의</td><td class="cell-deliverable">요구사항 정의서</td><td class="cell-duration">2d</td></tr>
+    <tr data-section="3" data-phase="분석"><td class="cell-id">3.2</td><td class="cell-phase"><span class="phase-badge badge-analysis">분석</span></td><td class="cell-task">필터 데이터 구조 분석</td><td class="cell-detail">각 필터 항목의 Metadata 구조, 값 분포 분석</td><td class="cell-deliverable">데이터 구조 분석서</td><td class="cell-duration">2d</td></tr>
+    <tr data-section="3" data-phase="분석"><td class="cell-id">3.3</td><td class="cell-phase"><span class="phase-badge badge-analysis">분석</span></td><td class="cell-task">정렬 기준 요구사항 분석</td><td class="cell-detail">관련도순/최신순/인기순 등 정렬 기준 정의</td><td class="cell-deliverable">정렬 기준 정의서</td><td class="cell-duration">1d</td></tr>
+    <tr data-section="3" data-phase="설계"><td class="cell-id">3.4</td><td class="cell-phase"><span class="phase-badge badge-design">설계</span></td><td class="cell-task">필터 API 명세 설계</td><td class="cell-detail">필터 파라미터 구조, 복합 필터 AND/OR 조합 정의</td><td class="cell-deliverable">API 명세서</td><td class="cell-duration">2d</td></tr>
+    <tr data-section="3" data-phase="설계"><td class="cell-id">3.5</td><td class="cell-phase"><span class="phase-badge badge-design">설계</span></td><td class="cell-task">OpenSearch 필터 쿼리 구조 설계</td><td class="cell-detail">Bool Query 구조, Filter/Aggregation 설계</td><td class="cell-deliverable">쿼리 설계서</td><td class="cell-duration">2d</td></tr>
+    <tr data-section="3" data-phase="설계"><td class="cell-id">3.6</td><td class="cell-phase"><span class="phase-badge badge-design">설계</span></td><td class="cell-task">필터 UI Wireframe 설계</td><td class="cell-detail">필터 패널 레이아웃, 선택/해제 UX, 필터 카운트 표시 설계</td><td class="cell-deliverable">Wireframe</td><td class="cell-duration">1d</td></tr>
+    <tr data-section="3" data-phase="설계"><td class="cell-id">3.7</td><td class="cell-phase"><span class="phase-badge badge-design">설계</span></td><td class="cell-task">정렬 기능 설계</td><td class="cell-detail">정렬 옵션 목록, 기본 정렬 기준, Sort 파라미터 설계</td><td class="cell-deliverable">정렬 기능 설계서</td><td class="cell-duration">1d</td></tr>
+    <tr data-section="3" data-phase="개발"><td class="cell-id">3.8</td><td class="cell-phase"><span class="phase-badge badge-dev">개발</span></td><td class="cell-task">Catalog 필터 API 개발</td><td class="cell-detail">Catalog 유형별 필터링 쿼리 구현</td><td class="cell-deliverable">Backend API</td><td class="cell-duration">2d</td></tr>
+    <tr data-section="3" data-phase="개발"><td class="cell-id">3.9</td><td class="cell-phase"><span class="phase-badge badge-dev">개발</span></td><td class="cell-task">데이터 유형 필터 API 개발</td><td class="cell-detail">Table/View/Dashboard 등 유형 필터 구현</td><td class="cell-deliverable">Backend API</td><td class="cell-duration">2d</td></tr>
+    <tr data-section="3" data-phase="개발"><td class="cell-id">3.10</td><td class="cell-phase"><span class="phase-badge badge-dev">개발</span></td><td class="cell-task">도메인 필터 API 개발</td><td class="cell-detail">도메인 계층 구조 기반 필터 쿼리 구현</td><td class="cell-deliverable">Backend API</td><td class="cell-duration">2d</td></tr>
+    <tr data-section="3" data-phase="개발"><td class="cell-id">3.11</td><td class="cell-phase"><span class="phase-badge badge-dev">개발</span></td><td class="cell-task">Tag 필터 API 개발</td><td class="cell-detail">다중 Tag 선택 기반 필터 쿼리 구현</td><td class="cell-deliverable">Backend API</td><td class="cell-duration">2d</td></tr>
+    <tr data-section="3" data-phase="개발"><td class="cell-id">3.12</td><td class="cell-phase"><span class="phase-badge badge-dev">개발</span></td><td class="cell-task">정렬 API 개발</td><td class="cell-detail">관련도/최신/인기 등 Sort 옵션 구현</td><td class="cell-deliverable">Backend API</td><td class="cell-duration">1d</td></tr>
+    <tr data-section="3" data-phase="개발"><td class="cell-id">3.13</td><td class="cell-phase"><span class="phase-badge badge-dev">개발</span></td><td class="cell-task">필터 패널 UI 개발</td><td class="cell-detail">필터 항목 렌더링, 선택 상태 관리, 필터 카운트 표시</td><td class="cell-deliverable">Frontend UI</td><td class="cell-duration">3d</td></tr>
+    <tr data-section="3" data-phase="개발"><td class="cell-id">3.14</td><td class="cell-phase"><span class="phase-badge badge-dev">개발</span></td><td class="cell-task">필터 연동 검색 결과 UI 개발</td><td class="cell-detail">필터 변경 시 검색 결과 실시간 반영</td><td class="cell-deliverable">Frontend UI</td><td class="cell-duration">2d</td></tr>
+
+  </tbody>
+</table>
+
+<script>
+  const state = { feature: new Set(), phase: new Set(), featureOnly: false };
+
+  function toggleChip(btn) {
+    const f = btn.dataset.filter, v = btn.dataset.value;
+    if (state[f].has(v)) { state[f].delete(v); btn.classList.remove('active'); }
+    else { state[f].add(v); btn.classList.add('active'); }
+    applyFilters();
+  }
+
+  function toggleFeatureOnly(btn) {
+    state.featureOnly = !state.featureOnly;
+    btn.classList.toggle('active', state.featureOnly);
+    applyFilters();
+  }
+
+  function resetFilters() {
+    state.feature.clear(); state.phase.clear(); state.featureOnly = false;
+    document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+    applyFilters();
+  }
+
+  function applyFilters() {
+    const fa = state.feature.size > 0, pa = state.phase.size > 0;
+    let visible = 0;
+
+    if (state.featureOnly) {
+      // 기능만 보기: group-header만 표시, 모든 task 행 숨김
+      document.querySelectorAll('tr.group-header').forEach(row => row.classList.remove('row-hidden'));
+      document.querySelectorAll('tbody tr[data-phase]').forEach(row => row.classList.add('row-hidden'));
+      const info = document.getElementById('result-info');
+      info.innerHTML = '<strong>3</strong>개 기능 표시 중 (전체 37건)';
+      const tbody = document.querySelector('tbody');
+      const emptyRow = tbody.querySelector('.empty-row');
+      if (emptyRow) emptyRow.remove();
+      return;
+    }
+
+    // group header rows
+    document.querySelectorAll('tr.group-header').forEach(row => {
+      const s = row.dataset.section;
+      const show = !fa || state.feature.has(s);
+      row.classList.toggle('row-hidden', !show);
+    });
+
+    // data rows
+    document.querySelectorAll('tbody tr[data-phase]').forEach(row => {
+      const secOk   = !fa || state.feature.has(row.dataset.section);
+      const phaseOk = !pa || state.phase.has(row.dataset.phase);
+      const show = secOk && phaseOk;
+      row.classList.toggle('row-hidden', !show);
+      if (show) visible++;
+    });
+
+    // empty state
+    const tbody = document.querySelector('tbody');
+    let emptyRow = tbody.querySelector('.empty-row');
+    const anyVisible = [...tbody.querySelectorAll('tr[data-phase]')].some(r => !r.classList.contains('row-hidden'));
+    if (!anyVisible) {
+      if (!emptyRow) {
+        emptyRow = document.createElement('tr');
+        emptyRow.className = 'empty-row';
+        emptyRow.innerHTML = '<td colspan="6">해당 조건의 Task가 없습니다</td>';
+        tbody.appendChild(emptyRow);
+      }
+    } else if (emptyRow) emptyRow.remove();
+
+    // result info
+    const info = document.getElementById('result-info');
+    info.innerHTML = (!fa && !pa)
+      ? '전체 <strong>37</strong>건 표시 중'
+      : '<strong>' + visible + '</strong>건 필터링됨 (전체 37건)';
+  }
+</script>
+</body>
+</html>
